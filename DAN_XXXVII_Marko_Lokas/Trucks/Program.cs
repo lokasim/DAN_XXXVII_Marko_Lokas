@@ -23,6 +23,10 @@ namespace Trucks
         public static int waitingFirstLoading = 0;
         public static int waitingSecondLoading = 0;
 
+
+        public static List<string> TruckTimeDestinationList = new List<string>();
+        public static List<string> LoadingTimeListAllTrucks = new List<string>();
+        public static List<string> LoadingTimeListAllTrucksSort = new List<string>();
         public static List<string> LoadingTimeListEven = new List<string>();
         public static List<string> LoadingTimeListOdd = new List<string>();
         public static List<int> TopRoutesList = new List<int>();
@@ -35,18 +39,13 @@ namespace Trucks
 
             Console.WriteLine("Press any key to start script...");
             Console.ReadKey();
-            
+
             Console.Clear();
             CrateRoutes();
             Thread managerThread = new Thread(new ThreadStart(ManagerMethod));
 
             managerThread.Start();
             managerThread.Join();
-            
-            //PrintTruckDelivered();
-            //PrintTruckCanceled();
-            //PrintForklift("Unloading");
-            //PrintForklift("Loading");
 
             for (int i = 1; i < 11; i++)
             {
@@ -63,7 +62,9 @@ namespace Trucks
                     TruckThreadList.Add(thread);
                 }
             }
-
+            //create threads for destination
+            Thread threadDestination = new Thread(new ThreadStart(DestinationWaiting));
+            
             lock (locker)
             {
                 while (counter != 10)
@@ -137,25 +138,23 @@ namespace Trucks
             TruckThreadList[8].Join();
             TruckThreadList[9].Join();
             Thread.Sleep(100);
-            Console.WriteLine("\nPress Enter to continue");
-            Console.ReadKey();
-
 
             for (int i = 0; i < LoadingTimeListOdd.Count; i++)
             {
-                
+
                 for (int j = i; j < LoadingTimeListEven.Count; j++)
                 {
-                    Console.Write(LoadingTimeListOdd[i] + "\n");
-                    Console.Write(LoadingTimeListEven[j] + "\n");
+                    LoadingTimeListAllTrucks.Add(LoadingTimeListOdd[i]);
+                    LoadingTimeListAllTrucks.Add(LoadingTimeListEven[j]);
                     break;
                 }
             }
-            
+            LoadingTimeListAllTrucks.Sort();
+            //start destination thread
+            threadDestination.Start();
+            threadDestination.Join();
 
-            //CrateRoutes();
-            //TopTenRoutes();
-
+            Console.WriteLine("Press any key to exit app");
             Console.ReadKey();
         }
 
@@ -194,9 +193,9 @@ namespace Trucks
                     Thread thread = Thread.CurrentThread;
                     Console.WriteLine(thread.Name + " is being loaded");
                     Random randomLoadingTime = new Random();
-                    int SecondTruckLoadingTime = randomLoadingTime.Next(500,5001);
+                    int SecondTruckLoadingTime = randomLoadingTime.Next(500, 5001);
                     Thread.Sleep(SecondTruckLoadingTime);
-                    Console.WriteLine(thread.Name + " is loaded " + SecondTruckLoadingTime  + " sec");
+                    Console.WriteLine(thread.Name + " is loaded " + SecondTruckLoadingTime + " sec");
                     LoadingTimeListEven.Add(thread.Name + "," + SecondTruckLoadingTime);
                     barrier.SignalAndWait();
                 }
@@ -205,17 +204,11 @@ namespace Trucks
                 Monitor.PulseAll(locker1);
             }
         }
-
-        public static int RandomLoadingTime()
+        
+        public static int RandomTransportTime()
         {
             Random random = new Random();
-            return random.Next(500, 15001);
-        }
-
-        public static int RandomLoadingTime2()
-        {
-            Random random = new Random();
-            return random.Next(0, 5);
+            return random.Next(500, 5001);
         }
 
         public static void CrateRoutes()
@@ -244,7 +237,7 @@ namespace Trucks
                     }
                 }
                 Console.SetCursorPosition(left, top);
-                Console.WriteLine("Completed random generated routes"); 
+                Console.WriteLine("Completed random generated routes");
                 Monitor.Pulse(locker);
             }
         }
@@ -253,11 +246,9 @@ namespace Trucks
         {
             lock (locker)
             {
-                //while (randomCounter != 1000)
-                //{
-                if(randomCounter == 1000)
+                if (randomCounter == 1000)
                 {
-                    Monitor.Wait(locker,0);
+                    Monitor.Wait(locker, 0);
 
                 }
                 else
@@ -265,14 +256,12 @@ namespace Trucks
                     Monitor.Wait(locker, 3000);
 
                 }
-                //}
-
                 string[] routes = File.ReadAllLines(@"..\..\Routes.txt");
                 foreach (var route in routes)
                 {
                     TopRoutesList.Add(Convert.ToInt32(route));
                 }
-                
+
                 //Sorted A to Z
                 TopRoutesList.Sort();
                 foreach (var item in TopRoutesList)
@@ -307,7 +296,6 @@ namespace Trucks
                 Console.WriteLine();
                 Console.WriteLine("Everything is ready, loading can begin. :)");
             }
-            
         }
 
         public static void ManagerMethod()
@@ -317,36 +305,45 @@ namespace Trucks
         public static Thread second = Thread.CurrentThread;
         public static Thread first = Thread.CurrentThread;
 
-        public static void Loading()
+        public static void DestinationWaiting()
         {
+            int count = 0;
+            foreach (var item in LoadingTimeListAllTrucks)
+            {
+                for (int i = count; i < TopTenRoutesList.Count;)
+                {
+                    string[] trucks = item.Split(',');
+                    Console.Write("\n" + new string('-', 50));
+                    Thread.Sleep(10);
+                    Console.WriteLine("\nYou can expect delivery between 500 and 5000ms...");
+                    Console.WriteLine("\nTransport to the destination...");
 
-                
-            
-            
+                    int randomDeliveryTime = RandomTransportTime();
+                    Thread.Sleep(randomDeliveryTime);
+                    Console.WriteLine("\n" + trucks[0] + "\nTime Loading: " + trucks[1] + "\nRoutes ID: " + TopTenRoutesList[i] + "\nDelivery time: " + randomDeliveryTime);
+                    TruckTimeDestinationList.Add(trucks[0] + "," + trucks[1] + "," + TopTenRoutesList[i] + "," + randomDeliveryTime);
 
-
+                    if (randomDeliveryTime > 3000)
+                    {
+                        PrintTruckCanceled();
+                        Console.WriteLine("The truck returns to base");
+                        Thread.Sleep(3000);
+                        Console.WriteLine("The truck is back");
+                    }
+                    else
+                    {
+                        PrintTruckDelivered();
+                        int unloading = Convert.ToInt32(trucks[1]);
+                        Console.WriteLine("Unloading in progress...");
+                        Thread.Sleep(Convert.ToInt16(unloading / 1.5));
+                        Console.WriteLine("Time Unloading: " + String.Format("{0:0.00}", unloading / 1.5));
+                    }
+                    Console.Write("\n" + new string('-', 50));
+                    count++;
+                    break;
+                }
+            }
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         public static void PrintTruckDelivered()
         {
